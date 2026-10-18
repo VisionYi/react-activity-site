@@ -1,0 +1,26 @@
+// 與 variables.scss 的 Tailwind md／lg 斷點一致。
+@mixin tablet {
+  @media (min-width: 768px) {
+    @content;
+  }
+}
+
+@mixin desktop {
+  @media (min-width: 1024px) {
+    @content;
+  }
+}
+
+@mixin container {
+  width: calc(100% - 40px);
+  max-width: var(--container-max);
+  margin-inline: auto;
+
+  @include tablet {
+    width: calc(100% - 48px);
+  }
+
+  @include desktop {
+    width: calc(100% - 64px);
+  }
+}

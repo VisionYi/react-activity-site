@@ -1,0 +1,72 @@
+@use './mixins' as layout;
+
+// 全域只處理基本排版與鍵盤焦點，元件外觀放各自的 SCSS 檔案。
+@layer base {
+  :root {
+    font-family: var(--font-body);
+    font-synthesis: none;
+    color: var(--text);
+    background: var(--background);
+  }
+
+  body {
+    margin: 0;
+    font-size: 15px;
+    line-height: 26px;
+  }
+
+  a {
+    color: var(--primary);
+    text-underline-offset: 5px;
+  }
+
+  h1, h2, h3 {
+    font-weight: 700;
+  }
+
+  h1 {
+    font-size: 32px;
+    line-height: 42px;
+    letter-spacing: -0.03em;
+
+    @include layout.tablet {
+      font-size: 48px;
+      line-height: 60px;
+    }
+  }
+
+  h2 {
+    font-size: 24px;
+    line-height: 34px;
+
+    @include layout.tablet {
+      font-size: 32px;
+      line-height: 44px;
+    }
+  }
+
+  p {
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    display: block;
+  }
+
+  :where(button, input, select, textarea) {
+    font: inherit;
+  }
+
+  :where(button, a, input, select, textarea):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}

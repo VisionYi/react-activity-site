@@ -1,0 +1,57 @@
+/* CSS variables 保存值，Tailwind 僅映射。 */
+:root {
+  --background: #f8f9ff;
+  --surface: var(--background);
+  --card: #ffffff;
+  --primary: #005087;
+  --on-primary: #ffffff;
+  --primary-container: #1769aa;
+  --text: #0d1c2f;
+  --text-muted: #414750;
+  --accent: #fc9430;
+  --on-accent: #663500;
+  --outline: #717781;
+  --outline-subtle: #c1c7d2;
+  --error: #ba1a1a;
+  --error-container: #ffdad6;
+  --radius-control: 8px;
+  --radius-card: 16px;
+  --radius-large: 24px;
+  --radius-pill: 9999px;
+  --container-max: 1280px;
+  --font-body: 'Plus Jakarta Sans', 'Noto Sans TC', system-ui, sans-serif;
+  --surface-tint: color-mix(in srgb, var(--primary-container) 8%, var(--surface));
+  --cover-decoration: color-mix(in srgb, var(--card) 34%, transparent);
+  --cover-label: color-mix(in srgb, var(--card) 90%, transparent);
+  --surface-soft: #eff4ff;
+  --accent-soft: #ffdcc3;
+  --photo-overlay: color-mix(in srgb, var(--text) 88%, transparent);
+  --banner-copy: #d4e6ff;
+  --shadow-hero: 0 12px 28px color-mix(in srgb, var(--text) 15%, transparent);
+  --shadow-card:
+    0 2px 6px color-mix(in srgb, var(--text) 5%, transparent),
+    0 8px 24px color-mix(in srgb, var(--primary) 6%, transparent);
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-outline: var(--outline);
+  --color-outline-subtle: var(--outline-subtle);
+  --color-error: var(--error);
+  --color-error-container: var(--error-container);
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-large: var(--radius-large);
+  --radius-pill: var(--radius-pill);
+  --font-sans: var(--font-body);
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+}
