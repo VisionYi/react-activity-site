@@ -1,0 +1,58 @@
+@layer components {
+  .api-error-dialog {
+    position: relative;
+    z-index: 50;
+  }
+
+  .api-error-dialog__backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgb(13 28 47 / 48%);
+    backdrop-filter: blur(3px);
+  }
+
+  .api-error-dialog__container {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .api-error-dialog__panel {
+    width: min(100%, 32rem);
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    border: 1px solid var(--outline-subtle);
+    border-radius: 24px;
+    padding: 24px;
+    background: var(--card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .api-error-dialog__title {
+    margin: 0;
+    color: var(--text);
+    font-size: 1.25rem;
+    font-weight: 700;
+  }
+
+  .api-error-dialog__message {
+    margin: 1rem 0 0;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .api-error-dialog__status {
+    margin: 0.5rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+
+  .api-error-dialog__actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+  }
+}

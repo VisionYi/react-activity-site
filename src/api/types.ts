@@ -55,16 +55,12 @@ export type EventListResponse = {
   years: string[];
 };
 
-export type ApiErrorPayload = { message: string; fieldErrors?: Record<string, string> };
-
 export class ApiError extends Error {
-  status: number;
-  payload: ApiErrorPayload;
+  status?: number;
 
-  constructor(status: number, payload: ApiErrorPayload) {
-    super(payload.message);
+  constructor(message: string, status?: number) {
+    super(message);
     this.name = 'ApiError';
     this.status = status;
-    this.payload = payload;
   }
 }

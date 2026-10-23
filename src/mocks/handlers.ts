@@ -27,8 +27,8 @@ function listComments(eventId: string) {
   return commentsByEvent.get(eventId)!;
 }
 
-function jsonError(status: number, message: string, fieldErrors?: Record<string, string>) {
-  return HttpResponse.json({ message, ...(fieldErrors ? { fieldErrors } : {}) }, { status });
+function jsonError(status: number, message: string) {
+  return HttpResponse.json({ message }, { status });
 }
 
 export const handlers = [
@@ -99,15 +99,15 @@ export const handlers = [
     const { author: rawAuthor, body: rawBody } = input as { author?: unknown; body?: unknown };
     const author = typeof rawAuthor === 'string' ? rawAuthor.trim() : '';
     const body = typeof rawBody === 'string' ? rawBody.trim() : '';
-    const fieldErrors: Record<string, string> = {};
-    if (!author) fieldErrors.author = '請填寫暱稱。';
-    else if (author.length > 40 || (rawAuthor as string).length > 40)
-      fieldErrors.author = '暱稱最多 40 字。';
-    if (!body) fieldErrors.body = '請寫下留言內容。';
-    else if (body.length > 500 || (rawBody as string).length > 500)
-      fieldErrors.body = '留言最多 500 字。';
-    if (Object.keys(fieldErrors).length > 0) {
-      return jsonError(400, '請檢查留言欄位。', fieldErrors);
+    if (
+      !author ||
+      author.length > 40 ||
+      (rawAuthor as string).length > 40 ||
+      !body ||
+      body.length > 500 ||
+      (rawBody as string).length > 500
+    ) {
+      return jsonError(400, '留言資料不正確，請檢查後再送出。');
     }
 
     const comment: Comment = {

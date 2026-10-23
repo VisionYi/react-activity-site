@@ -19,17 +19,12 @@ import {
   Video,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { Comment, EventDetail, Photo } from '../api/types';
-import { ApiError } from '../api/types';
-import {
-  deleteEventComment,
-  useGetEventComments,
-  useGetEventDetail,
-  patchEventCommentsLike,
-  postEventComments,
-} from '../api/client';
+import type { EventDetail, Photo } from '../api/types';
+import { useGetEventDetail } from '../api/client';
 import { TextAreaField, TextInputField } from '../components/FormFields';
 import ActivityImage from '../components/ActivityImage';
+import { useEventComments } from '../hooks/useEventComments';
+import type { CommentActionResult } from '../hooks/useEventComments';
 import { formatClock, formatCommentDate, formatEventDate } from '../utils/date';
 import './EventDetailPage.scss';
 
@@ -308,18 +303,18 @@ function CommentForm({
   onAdd,
   isMutating,
 }: {
-  onAdd: (author: string, body: string) => Promise<Comment>;
+  onAdd: (author: string, body: string) => Promise<CommentActionResult>;
   isMutating: boolean;
 }) {
   const [author, setAuthor] = useState('');
   const [body, setBody] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<{ author?: string; body?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isSubmitting || isMutating) return;
-    const nextErrors: Record<string, string> = {};
+    const nextErrors: { author?: string; body?: string } = {};
     if (!author.trim()) nextErrors.author = '請填寫暱稱。';
     if (!body.trim()) nextErrors.body = '先寫一點回憶再送出喔。';
     if (Object.keys(nextErrors).length > 0) {
@@ -328,15 +323,12 @@ function CommentForm({
     }
     setErrors({});
     setIsSubmitting(true);
+
     try {
-      await onAdd(author.trim(), body.trim());
-      setAuthor('');
-      setBody('');
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setErrors(error.payload.fieldErrors ?? { form: error.message });
-      } else {
-        setErrors({ form: error instanceof Error ? error.message : '留言送出失敗，請再試一次。' });
+      const result = await onAdd(author.trim(), body.trim());
+      if (result.ok) {
+        setAuthor('');
+        setBody('');
       }
     } finally {
       setIsSubmitting(false);
@@ -344,7 +336,7 @@ function CommentForm({
   }
 
   return (
-    <form className="comment-form" onSubmit={handleSubmit}>
+    <form className="comment-form" noValidate onSubmit={handleSubmit}>
       <TextInputField
         className="comment-form__label"
         controlClassName="comment-form__control comment-form__control--nickname"
@@ -358,7 +350,7 @@ function CommentForm({
         error={errors.author}
         onChange={(event) => {
           setAuthor(event.currentTarget.value);
-          setErrors((current) => ({ ...current, author: '', form: '' }));
+          setErrors((current) => ({ ...current, author: '' }));
         }}
       />
       <TextAreaField
@@ -373,10 +365,9 @@ function CommentForm({
         error={errors.body}
         onChange={(event) => {
           setBody(event.currentTarget.value);
-          setErrors((current) => ({ ...current, body: '', form: '' }));
+          setErrors((current) => ({ ...current, body: '' }));
         }}
       />
-      {errors.form && <p className="comment-form__error" role="alert">{errors.form}</p>}
       <div className="comment-form__actions">
         <p className="comment-form__count">{body.length}／500</p>
         <button
@@ -392,64 +383,34 @@ function CommentForm({
   );
 }
 
-type CommentSectionProps = {
-  eventId: string;
-  comments: Comment[];
-  commentsLoading: boolean;
-  commentsValidating: boolean;
-  commentsError?: Error;
-  actionError?: string;
-  isMutating: boolean;
-  onAdd: (author: string, body: string) => Promise<Comment>;
-  onDelete: (id: string) => Promise<unknown>;
-  onSetLiked: (id: string, liked: boolean) => Promise<unknown>;
-  onRetryComments: () => void;
-};
+function CommentSection({ eventId }: { eventId: string }) {
+  const {
+    comments,
+    isLoading,
+    isMutating,
+    addComment,
+    deleteComment,
+    setCommentLiked,
+  } = useEventComments(eventId);
+  const commentList = comments ?? [];
 
-function CommentSection({
-  eventId,
-  comments,
-  commentsLoading,
-  commentsValidating,
-  commentsError,
-  actionError,
-  isMutating,
-  onAdd,
-  onDelete,
-  onSetLiked,
-  onRetryComments,
-}: CommentSectionProps) {
   return (
     <section className="detail-card detail-comments" aria-label="活動心得與留言">
       <SectionTitle
         title="活動心得與留言"
         icon={MessageSquareText}
-        count={`${comments.length} 則回憶分享`}
+        count={`${commentList.length} 則回憶分享`}
       />
       <p className="detail-comments__intro">
         參加了這次活動嗎？寫下你當下的感動，或是想對夥伴們說的話。
       </p>
-      <CommentForm key={eventId} onAdd={onAdd} isMutating={isMutating} />
-      {commentsError && (
-        <p className="comment-form__error" role="alert">
-          留言載入失敗：{commentsError.message}{' '}
-          <button type="button" onClick={onRetryComments}>重試</button>
-        </p>
-      )}
-      {actionError && (
-        <p className="comment-form__error" role="alert">
-          留言操作失敗：{actionError}
-        </p>
-      )}
-      {commentsLoading && <p className="detail-comments__empty">正在載入留言…</p>}
-      {!commentsLoading && commentsValidating && (
-        <p className="detail-comments__empty" role="status">正在更新留言…</p>
-      )}
-      {!commentsLoading && !commentsError && comments.length === 0 && (
+      <CommentForm key={eventId} onAdd={addComment} isMutating={isMutating} />
+      {isLoading && <p className="detail-comments__empty">正在載入留言…</p>}
+      {!isLoading && comments?.length === 0 && (
         <p className="detail-comments__empty">還沒有留言，來留下第一段回憶吧。</p>
       )}
       <ul className="comment-list">
-        {comments.map((item) => (
+        {commentList.map((item) => (
           <li className="comment-list__item" key={item.id}>
             <div className="comment-list__header">
               <strong>{item.author}</strong>
@@ -463,7 +424,7 @@ function CommentSection({
                 disabled={isMutating}
                 aria-pressed={item.liked}
                 aria-label={`${item.liked ? '收回愛心' : '送出愛心'}（${item.likes}）`}
-                onClick={() => onSetLiked(item.id, !item.liked).catch(() => undefined)}
+                onClick={() => setCommentLiked(item.id, !item.liked)}
               >
                 <Heart size={16} fill={item.liked ? 'currentColor' : 'none'} aria-hidden="true" />
                 {item.likes}
@@ -472,7 +433,7 @@ function CommentSection({
                 className="comment-list__delete"
                 type="button"
                 disabled={isMutating}
-                onClick={() => onDelete(item.id).catch(() => undefined)}
+                onClick={() => deleteComment(item.id)}
               >
                 <Trash2 size={14} aria-hidden="true" />
                 刪除這則留言
@@ -488,20 +449,8 @@ function CommentSection({
 function EventDetailContent({ eventId }: { eventId: string }) {
   const {
     data: event,
-    error,
     isLoading,
-    isValidating,
-    mutate,
   } = useGetEventDetail(eventId);
-  const {
-    data: comments = [],
-    error: commentsError,
-    isLoading: commentsLoading,
-    isValidating: commentsValidating,
-    mutate: mutateComments,
-  } = useGetEventComments(eventId);
-  const [commentActionError, setCommentActionError] = useState('');
-  const [isMutatingComments, setIsMutatingComments] = useState(false);
 
   if (isLoading) {
     return (
@@ -511,92 +460,22 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     );
   }
   if (!event) {
-    const isNotFound = error instanceof ApiError && error.status === 404;
     return (
       <main className="page event-detail">
-        <h1>{isNotFound ? '找不到這場活動' : '活動資料載入失敗'}</h1>
-        {!isNotFound && <p>{error?.message ?? '請稍後再試。'}</p>}
-        {!isNotFound && (
-          <button className="button button--soft button--pill" type="button" onClick={() => mutate()}>
-            重試
-          </button>
-        )}
         <p><Link to="/">返回活動首頁</Link></p>
       </main>
     );
   }
-  async function runCommentAction<T>(action: () => Promise<T>) {
-    setIsMutatingComments(true);
-    try {
-      const result = await action();
-      try {
-        await mutateComments();
-      } catch {
-        // 留言重新載入失敗會顯示在 commentsError，不影響已成功的寫入操作。
-      }
-      return result;
-    } finally {
-      setIsMutatingComments(false);
-    }
-  }
-
-  async function addComment(author: string, body: string) {
-    setCommentActionError('');
-    return runCommentAction(() => postEventComments(eventId, { author, body }));
-  }
-
-  async function setCommentLiked(commentId: string, liked: boolean) {
-    try {
-      await runCommentAction(() =>
-        patchEventCommentsLike(eventId, commentId, { liked }),
-      );
-      setCommentActionError('');
-    } catch (error) {
-      setCommentActionError(error instanceof Error ? error.message : '愛心更新失敗，請再試一次。');
-      throw error;
-    }
-  }
-
-  async function deleteComment(commentId: string) {
-    try {
-      await runCommentAction(() => deleteEventComment(eventId, commentId));
-      setCommentActionError('');
-    } catch (error) {
-      setCommentActionError(error instanceof Error ? error.message : '刪除留言失敗，請再試一次。');
-      throw error;
-    }
-  }
 
   return (
     <main className="page event-detail">
-      {error && (
-        <p className="comment-form__error" role="alert">
-          活動資料背景更新失敗：{error.message}{' '}
-          <button type="button" onClick={() => mutate()}>
-            重試
-          </button>
-        </p>
-      )}
-      {isValidating && <p className="sr-only" aria-live="polite">正在更新活動資料…</p>}
       <EventHero event={event} />
       <div className="event-detail__layout">
         <EventStory event={event} />
         <DetailSidebar event={event} />
         <HighlightVideo event={event} />
         <PhotoGallery key={event.id} photos={event.photos} />
-        <CommentSection
-          eventId={event.id}
-          comments={comments}
-          commentsLoading={commentsLoading}
-          commentsValidating={commentsValidating}
-          commentsError={commentsError}
-          actionError={commentActionError}
-          isMutating={isMutatingComments || commentsValidating}
-          onAdd={addComment}
-          onDelete={deleteComment}
-          onSetLiked={setCommentLiked}
-          onRetryComments={() => mutateComments()}
-        />
+        <CommentSection eventId={event.id} />
       </div>
     </main>
   );

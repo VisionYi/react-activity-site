@@ -1,3 +1,4 @@
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { formatDate } from '../utils/date';
 import { Link } from 'react-router';
 import {
@@ -44,10 +45,11 @@ function SectionHeading({
   );
 }
 
-function HeroSection({ totalEvents }: { totalEvents: number }) {
-  const { data: featured, error, isLoading, isValidating, mutate } = useGetEventDetail(
-    HOME.hero.featuredEventId,
-  );
+function HeroSection() {
+  const { filters } = useEventFilters();
+  const { data: events } = useGetEvents(filters);
+  const { data: featured, isLoading } = useGetEventDetail(HOME.hero.featuredEventId);
+  const totalEvents = events?.totalEvents ?? 0;
   const stats = [
     { value: totalEvents, label: '場溫暖活動' },
     { value: ALBUMS.length, label: '本回憶相簿' },
@@ -98,16 +100,9 @@ function HeroSection({ totalEvents }: { totalEvents: number }) {
           {featured ? (
             <>
               <ActivityImage image={featured.cover} className="hero__photo" priority />
-              <p className="hero__badge" role={error ? 'alert' : 'status'}>
+              <p className="hero__badge" role="status">
                 <span className="status-dot" />
-                {error ? (
-                  <>
-                    精選活動更新失敗。{' '}
-                    <button type="button" onClick={() => void mutate()}>
-                      重試
-                    </button>
-                  </>
-                ) : HOME.hero.badge}
+                {HOME.hero.badge}
               </p>
               <Link className="hero__featured" to={`/events/${featured.id}`}>
                 <span className="hero__featured-icon">
@@ -122,16 +117,8 @@ function HeroSection({ totalEvents }: { totalEvents: number }) {
               </Link>
             </>
           ) : (
-            <p className="hero__featured-copy" role={error ? 'alert' : 'status'}>
-              {error ? '精選活動暫時載入失敗。' : isLoading ? '載入精選活動…' : '正在更新精選活動…'}{' '}
-              {error && (
-                <button type="button" onClick={() => void mutate()}>
-                  重試
-                </button>
-              )}
-            </p>
+            isLoading ? <p className="hero__featured-copy" role="status">載入精選活動…</p> : null
           )}
-          {featured && isValidating && <span className="sr-only">正在更新精選活動資料</span>}
         </div>
       </div>
     </section>
@@ -141,10 +128,18 @@ function HeroSection({ totalEvents }: { totalEvents: number }) {
 type FilterProps = {
   filters: EventFilters;
   onChange: (patch: Partial<EventFilters>) => void;
+  queryDraft: string;
+  onCompositionStart: () => void;
+  onCompositionEnd: (query: string) => void;
+  onReset: () => void;
 };
 function FilterBar({
   filters,
   onChange,
+  queryDraft,
+  onCompositionStart,
+  onCompositionEnd,
+  onReset,
   count,
   total,
   categories,
@@ -166,8 +161,10 @@ function FilterBar({
             className="filter-bar__control"
             type="search"
             placeholder="搜尋活動名稱、關鍵字或地點…"
-            value={filters.query}
+            value={queryDraft}
             onChange={(event) => onChange({ query: event.currentTarget.value })}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={(event) => onCompositionEnd(event.currentTarget.value)}
           />
         </label>
         <label className="filter-bar__field">
@@ -231,7 +228,7 @@ function FilterBar({
         <button
           className="filter-bar__reset"
           type="button"
-          onClick={() => onChange(INITIAL_FILTERS)}
+          onClick={onReset}
         >
           重設所有條件
         </button>
@@ -240,8 +237,45 @@ function FilterBar({
   );
 }
 
-function ActivitySection({ filters, onChange }: FilterProps) {
-  const { data, error, isLoading, isValidating, mutate } = useGetEvents(filters);
+function ActivitySection() {
+  const { filters, updateFilters } = useEventFilters();
+  const [queryInput, setQueryInput] = useState({ value: filters.query, committedQuery: filters.query });
+  const [isComposing, setIsComposing] = useState(false);
+  const skipDebounceRef = useRef(false);
+  const queryDraft = queryInput.committedQuery === filters.query ? queryInput.value : filters.query;
+  const commitQuery = useEffectEvent((query: string) => updateFilters({ query }));
+
+  useEffect(() => {
+    if (isComposing) return;
+    if (queryDraft === filters.query) {
+      skipDebounceRef.current = false;
+      return;
+    }
+    if (skipDebounceRef.current) return;
+
+    const timeoutId = window.setTimeout(() => commitQuery(queryDraft), 600);
+    return () => window.clearTimeout(timeoutId);
+  }, [filters.query, isComposing, queryDraft]);
+
+  function handleFilterChange(patch: Partial<EventFilters>) {
+    if (Object.hasOwn(patch, 'query')) {
+      skipDebounceRef.current = false;
+      setQueryInput({ value: patch.query ?? '', committedQuery: filters.query });
+    }
+
+    const immediateFilters = { ...patch };
+    delete immediateFilters.query;
+    if (Object.keys(immediateFilters).length > 0) updateFilters(immediateFilters);
+  }
+
+  function resetFilters() {
+    skipDebounceRef.current = true;
+    setQueryInput({ value: INITIAL_FILTERS.query, committedQuery: filters.query });
+    setIsComposing(false);
+    updateFilters(INITIAL_FILTERS);
+  }
+
+  const { data, isLoading } = useGetEvents(filters);
   const visibleEvents = data?.events ?? [];
   return (
     <section className="activity-section" id="activities" aria-label="活動探索">
@@ -249,25 +283,23 @@ function ActivitySection({ filters, onChange }: FilterProps) {
         <SectionHeading content={HOME.events} icon={CalendarDays} />
         <FilterBar
           filters={filters}
-          onChange={onChange}
+          queryDraft={queryDraft}
+          onChange={handleFilterChange}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={(query) => {
+            setQueryInput({ value: query, committedQuery: filters.query });
+            setIsComposing(false);
+          }}
+          onReset={resetFilters}
           count={data?.total ?? 0}
           total={data?.totalEvents ?? 0}
           categories={data?.categories ?? []}
           years={data?.years ?? []}
         />
-        {error && (
-          <div className="activity-section__empty" role="alert">
-            <p>{error.message || '活動資料載入失敗。'}</p>
-            <button type="button" onClick={() => void mutate()}>
-              重試
-            </button>
-          </div>
-        )}
-        {!error && isLoading && <p className="activity-section__empty">正在載入活動資料…</p>}
-        {!error && !isLoading && visibleEvents.length === 0 && (
+        {isLoading && <p className="activity-section__empty">正在載入活動資料…</p>}
+        {!isLoading && data && visibleEvents.length === 0 && (
           <p className="activity-section__empty">找不到符合條件的活動，試著重設所有條件。</p>
         )}
-        {data && isValidating && <p className="sr-only" aria-live="polite">正在更新活動資料…</p>}
         <ul className="activity-list">
           {visibleEvents.map((event) => (
             <li key={event.id}>
@@ -386,12 +418,10 @@ function CommunityBanner() {
 }
 
 export default function HomePage() {
-  const { filters, updateFilters } = useEventFilters();
-  const { data } = useGetEvents(filters);
   return (
     <main>
-      <HeroSection totalEvents={data?.totalEvents ?? 0} />
-      <ActivitySection filters={filters} onChange={updateFilters} />
+      <HeroSection />
+      <ActivitySection />
       <AlbumSection />
       <VideoSection />
       <CommunityBanner />

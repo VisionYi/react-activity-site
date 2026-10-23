@@ -1,7 +1,6 @@
 import axios from 'axios';
 import useSWR from 'swr';
 import type {
-  ApiErrorPayload,
   Comment,
   EventDetail,
   EventFilters,
@@ -13,16 +12,23 @@ const request = axios.create({
   baseURL: `${import.meta.env.BASE_URL}api`,
 });
 
+function normalizeErrorPayload(value: unknown): string {
+  const message = (value as { message?: unknown } | null)?.message;
+  return typeof message === 'string' ? message : '請求失敗，請稍後再試。';
+}
+
 request.interceptors.response.use(
   (response) => response.data,
   (error: unknown) => {
-    if (axios.isAxiosError<ApiErrorPayload>(error) && error.response) {
-      const payload = error.response.data;
+    if (axios.isAxiosError(error)) {
+      if (!error.response) {
+        return Promise.reject(
+          new ApiError('目前無法連線到服務，請檢查網路後再試。'),
+        );
+      }
+
       return Promise.reject(
-        new ApiError(error.response.status, {
-          message: payload?.message ?? `請求失敗（${error.response.status}）`,
-          fieldErrors: payload?.fieldErrors,
-        }),
+        new ApiError(normalizeErrorPayload(error.response.data), error.response.status),
       );
     }
 
