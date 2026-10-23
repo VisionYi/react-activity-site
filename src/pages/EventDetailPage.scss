@@ -551,24 +551,12 @@
       }
     }
 
-    &__placeholder {
-      display: flex;
+    &__image {
+      display: block;
+      overflow: hidden;
       aspect-ratio: 1;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
       border-radius: var(--radius-card);
-      padding: 12px;
-      color: var(--primary);
-      text-align: center;
-      background: var(--surface-tint);
-
-      small {
-        color: var(--text-muted);
-        font-size: 10px;
-        line-height: 16px;
-      }
+      object-fit: cover;
     }
 
     &__empty {
@@ -628,6 +616,11 @@
       color: var(--text);
       font-size: 14px;
       line-height: 24px;
+
+      &--nickname {
+        min-height: 48px;
+        padding-block: 12px;
+      }
     }
 
     &__actions {

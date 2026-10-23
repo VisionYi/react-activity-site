@@ -15,39 +15,23 @@ import {
   Send,
   Sprout,
   Trash2,
-  Trees,
   Users,
   Video,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { DETAIL, EVENTS } from '../data';
-import type { Photo, CommentItem, EventItem, ImageAsset } from '../data';
+import type { Comment, EventDetail, Photo } from '../api/types';
+import { ApiError } from '../api/types';
+import {
+  deleteEventComment,
+  useGetEventComments,
+  useGetEventDetail,
+  patchEventCommentsLike,
+  postEventComments,
+} from '../api/client';
+import { TextAreaField, TextInputField } from '../components/FormFields';
+import ActivityImage from '../components/ActivityImage';
 import { formatClock, formatCommentDate, formatEventDate } from '../utils/date';
 import './EventDetailPage.scss';
-
-function DetailImage({
-  image,
-  className,
-  priority = false,
-}: {
-  image: ImageAsset;
-  className: string;
-  priority?: boolean;
-}) {
-  return (
-    <img
-      className={className}
-      src={image.src}
-      alt={image.alt}
-      width={image.width}
-      height={image.height}
-      style={{ objectPosition: image.position }}
-      loading={priority ? 'eager' : 'lazy'}
-      fetchPriority={priority ? 'high' : 'auto'}
-      decoding="async"
-    />
-  );
-}
 
 function SectionTitle({
   title,
@@ -67,7 +51,7 @@ function SectionTitle({
   );
 }
 
-function EventHero({ event }: { event: EventItem }) {
+function EventHero({ event }: { event: EventDetail }) {
   return (
     <header className="event-hero">
       <div className="event-hero__navigation">
@@ -82,7 +66,7 @@ function EventHero({ event }: { event: EventItem }) {
         </span>
       </div>
       <div className="event-hero__visual">
-        <DetailImage image={event.cover} className="event-hero__image" priority />
+        <ActivityImage image={event.cover} className="event-hero__image" priority />
         <div className="event-hero__copy">
           <p className="event-hero__code">活動代碼 #{event.code}</p>
           <h1 className="event-hero__title">{event.title}</h1>
@@ -110,8 +94,8 @@ function EventHero({ event }: { event: EventItem }) {
   );
 }
 
-function EventStory() {
-  const article = DETAIL.article;
+function EventStory({ event }: { event: EventDetail }) {
+  const article = event.content.article;
   return (
     <article className="detail-card event-story">
       <header className="event-story__header">
@@ -133,7 +117,7 @@ function EventStory() {
       <div className="event-story__photos">
         {article.photos.map((photo) => (
           <figure key={photo.image.src}>
-            <DetailImage image={photo.image} className="event-story__image" />
+            <ActivityImage image={photo.image} className="event-story__image" />
             <figcaption className="event-story__caption">{photo.caption}</figcaption>
           </figure>
         ))}
@@ -191,7 +175,8 @@ function EventStory() {
   );
 }
 
-function DetailSidebar({ date }: { date: string }) {
+function DetailSidebar({ event }: { event: EventDetail }) {
+  const { date, content } = event;
   return (
     <aside className="detail-sidebar" aria-label="活動時間軸與地點">
       <div className="detail-sidebar__inner">
@@ -202,7 +187,7 @@ function DetailSidebar({ date }: { date: string }) {
           </h2>
           <p className="sidebar-card__intro">這一天，我們一起做了什麼？</p>
           <ol className="event-timeline">
-            {DETAIL.timeline.map((item) => (
+            {content.timeline.map((item) => (
               <li className="event-timeline__item" key={item.time}>
                 <time className="event-timeline__time" dateTime={`${date}T${item.time}`}>
                   {formatClock(date, item.time)}
@@ -223,15 +208,15 @@ function DetailSidebar({ date }: { date: string }) {
             role="img"
             aria-label="東眼山活動地點示意版位，非互動地圖"
           >
-            <span>{DETAIL.location.title}</span>
+            <span>{content.location.title}</span>
           </div>
           <p className="sidebar-card__description">
             <strong>地址：</strong>
-            {DETAIL.location.address}
+            {content.location.address}
           </p>
           <p className="sidebar-card__description">
             <strong>氣候提醒：</strong>
-            {DETAIL.location.reminder}
+            {content.location.reminder}
           </p>
         </section>
       </div>
@@ -239,21 +224,21 @@ function DetailSidebar({ date }: { date: string }) {
   );
 }
 
-function HighlightVideo({ eventId }: { eventId: string }) {
+function HighlightVideo({ event }: { event: EventDetail }) {
   return (
     <section className="detail-card detail-video" aria-label="活動精華影片">
       <SectionTitle title="活動精華影片" icon={Video} />
       <Link
         className="detail-video__poster"
-        to={`/events/${eventId}`}
+        to={`/events/${event.id}`}
         aria-label="活動精華影片示意，連回本活動頁面"
       >
-        <DetailImage image={DETAIL.video.image} className="detail-video__image" />
+        <ActivityImage image={event.content.video.image} className="detail-video__image" />
         <span className="detail-video__play">
           <Play size={28} fill="currentColor" aria-hidden="true" />
         </span>
       </Link>
-      <p className="detail-video__description">{DETAIL.video.description}</p>
+      <p className="detail-video__description">{event.content.video.description}</p>
     </section>
   );
 }
@@ -297,10 +282,7 @@ function PhotoGallery({ photos }: { photos: Photo[] }) {
         {visiblePhotos.map((photo) => (
           <li key={photo.id}>
             <figure>
-              <div className="photo-gallery__placeholder" role="img" aria-label={photo.alt}>
-                <Trees size={32} aria-hidden="true" />
-                <small>{photo.alt}</small>
-              </div>
+              <ActivityImage image={photo} className="photo-gallery__image" />
               <figcaption className="sr-only">{photo.category}</figcaption>
             </figure>
           </li>
@@ -322,70 +304,121 @@ function PhotoGallery({ photos }: { photos: Photo[] }) {
   );
 }
 
-function CommentForm({ onAdd }: { onAdd: (body: string) => void }) {
+function CommentForm({
+  onAdd,
+  isMutating,
+}: {
+  onAdd: (author: string, body: string) => Promise<Comment>;
+  isMutating: boolean;
+}) {
+  const [author, setAuthor] = useState('');
   const [body, setBody] = useState('');
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmedBody = body.trim();
-    if (!trimmedBody) {
-      setError('先寫一點回憶再送出喔。');
+    if (isSubmitting || isMutating) return;
+    const nextErrors: Record<string, string> = {};
+    if (!author.trim()) nextErrors.author = '請填寫暱稱。';
+    if (!body.trim()) nextErrors.body = '先寫一點回憶再送出喔。';
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       return;
     }
-    onAdd(trimmedBody);
-    setBody('');
-    setError('');
+    setErrors({});
+    setIsSubmitting(true);
+    try {
+      await onAdd(author.trim(), body.trim());
+      setAuthor('');
+      setBody('');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrors(error.payload.fieldErrors ?? { form: error.message });
+      } else {
+        setErrors({ form: error instanceof Error ? error.message : '留言送出失敗，請再試一次。' });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
     <form className="comment-form" onSubmit={handleSubmit}>
-      <label className="comment-form__label">
-        <span className="sr-only">留下今天的回憶</span>
-        <textarea
-          className="comment-form__control"
-          required
-          maxLength={500}
-          value={body}
-          placeholder="寫下你今天的回憶……"
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? 'comment-error' : undefined}
-          onChange={(event) => {
-            setBody(event.currentTarget.value);
-            setError('');
-          }}
-        />
-      </label>
-      {error && (
-        <p className="comment-form__error" id="comment-error" role="alert">
-          {error}
-        </p>
-      )}
+      <TextInputField
+        className="comment-form__label"
+        controlClassName="comment-form__control comment-form__control--nickname"
+        label="暱稱"
+        name="author"
+        required
+        maxLength={40}
+        autoComplete="nickname"
+        value={author}
+        placeholder="怎麼稱呼你？"
+        error={errors.author}
+        onChange={(event) => {
+          setAuthor(event.currentTarget.value);
+          setErrors((current) => ({ ...current, author: '', form: '' }));
+        }}
+      />
+      <TextAreaField
+        className="comment-form__label"
+        controlClassName="comment-form__control"
+        label="留下今天的回憶"
+        name="body"
+        required
+        maxLength={500}
+        value={body}
+        placeholder="寫下你今天的回憶……"
+        error={errors.body}
+        onChange={(event) => {
+          setBody(event.currentTarget.value);
+          setErrors((current) => ({ ...current, body: '', form: '' }));
+        }}
+      />
+      {errors.form && <p className="comment-form__error" role="alert">{errors.form}</p>}
       <div className="comment-form__actions">
         <p className="comment-form__count">{body.length}／500</p>
-        <button className="button button--accent button--pill" type="submit">
+        <button
+          className="button button--accent button--pill"
+          type="submit"
+          disabled={isSubmitting || isMutating}
+        >
           <Send size={16} aria-hidden="true" />
-          送出回憶
+          {isSubmitting ? '送出中…' : isMutating ? '更新中…' : '送出回憶'}
         </button>
       </div>
     </form>
   );
 }
 
-type DetailProps = {
-  comments: CommentItem[];
-  onAdd: (eventId: string, body: string) => void;
-  onDelete: (id: string) => void;
-  onToggleLike: (id: string) => void;
+type CommentSectionProps = {
+  eventId: string;
+  comments: Comment[];
+  commentsLoading: boolean;
+  commentsValidating: boolean;
+  commentsError?: Error;
+  actionError?: string;
+  isMutating: boolean;
+  onAdd: (author: string, body: string) => Promise<Comment>;
+  onDelete: (id: string) => Promise<unknown>;
+  onSetLiked: (id: string, liked: boolean) => Promise<unknown>;
+  onRetryComments: () => void;
 };
 
 function CommentSection({
   eventId,
   comments,
+  commentsLoading,
+  commentsValidating,
+  commentsError,
+  actionError,
+  isMutating,
   onAdd,
   onDelete,
-  onToggleLike,
-}: DetailProps & { eventId: string }) {
+  onSetLiked,
+  onRetryComments,
+}: CommentSectionProps) {
   return (
     <section className="detail-card detail-comments" aria-label="活動心得與留言">
       <SectionTitle
@@ -396,15 +429,30 @@ function CommentSection({
       <p className="detail-comments__intro">
         參加了這次活動嗎？寫下你當下的感動，或是想對夥伴們說的話。
       </p>
-      <CommentForm key={eventId} onAdd={(body) => onAdd(eventId, body)} />
-      {comments.length === 0 && (
+      <CommentForm key={eventId} onAdd={onAdd} isMutating={isMutating} />
+      {commentsError && (
+        <p className="comment-form__error" role="alert">
+          留言載入失敗：{commentsError.message}{' '}
+          <button type="button" onClick={onRetryComments}>重試</button>
+        </p>
+      )}
+      {actionError && (
+        <p className="comment-form__error" role="alert">
+          留言操作失敗：{actionError}
+        </p>
+      )}
+      {commentsLoading && <p className="detail-comments__empty">正在載入留言…</p>}
+      {!commentsLoading && commentsValidating && (
+        <p className="detail-comments__empty" role="status">正在更新留言…</p>
+      )}
+      {!commentsLoading && !commentsError && comments.length === 0 && (
         <p className="detail-comments__empty">還沒有留言，來留下第一段回憶吧。</p>
       )}
       <ul className="comment-list">
         {comments.map((item) => (
           <li className="comment-list__item" key={item.id}>
             <div className="comment-list__header">
-              <strong>訪客</strong>
+              <strong>{item.author}</strong>
               <time dateTime={item.createdAt}>{formatCommentDate(item.createdAt)}</time>
             </div>
             <p className="comment-list__body">{item.body}</p>
@@ -412,9 +460,10 @@ function CommentSection({
               <button
                 className="comment-list__like"
                 type="button"
+                disabled={isMutating}
                 aria-pressed={item.liked}
                 aria-label={`${item.liked ? '收回愛心' : '送出愛心'}（${item.likes}）`}
-                onClick={() => onToggleLike(item.id)}
+                onClick={() => onSetLiked(item.id, !item.liked).catch(() => undefined)}
               >
                 <Heart size={16} fill={item.liked ? 'currentColor' : 'none'} aria-hidden="true" />
                 {item.likes}
@@ -422,7 +471,8 @@ function CommentSection({
               <button
                 className="comment-list__delete"
                 type="button"
-                onClick={() => onDelete(item.id)}
+                disabled={isMutating}
+                onClick={() => onDelete(item.id).catch(() => undefined)}
               >
                 <Trash2 size={14} aria-hidden="true" />
                 刪除這則留言
@@ -435,34 +485,134 @@ function CommentSection({
   );
 }
 
-export default function EventDetailPage({ comments, onAdd, onDelete, onToggleLike }: DetailProps) {
-  const { eventId } = useParams();
-  const event = EVENTS.find((item) => item.id === eventId);
-  if (!event)
+function EventDetailContent({ eventId }: { eventId: string }) {
+  const {
+    data: event,
+    error,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useGetEventDetail(eventId);
+  const {
+    data: comments = [],
+    error: commentsError,
+    isLoading: commentsLoading,
+    isValidating: commentsValidating,
+    mutate: mutateComments,
+  } = useGetEventComments(eventId);
+  const [commentActionError, setCommentActionError] = useState('');
+  const [isMutatingComments, setIsMutatingComments] = useState(false);
+
+  if (isLoading) {
     return (
-      <main className="page event-detail">
-        <h1>找不到這場活動</h1>
-        <Link to="/">返回活動首頁</Link>
+      <main className="page event-detail" role="status">
+        <p>正在載入活動資料…</p>
       </main>
     );
-  const eventComments = comments.filter((item) => item.eventId === event.id);
+  }
+  if (!event) {
+    const isNotFound = error instanceof ApiError && error.status === 404;
+    return (
+      <main className="page event-detail">
+        <h1>{isNotFound ? '找不到這場活動' : '活動資料載入失敗'}</h1>
+        {!isNotFound && <p>{error?.message ?? '請稍後再試。'}</p>}
+        {!isNotFound && (
+          <button className="button button--soft button--pill" type="button" onClick={() => mutate()}>
+            重試
+          </button>
+        )}
+        <p><Link to="/">返回活動首頁</Link></p>
+      </main>
+    );
+  }
+  async function runCommentAction<T>(action: () => Promise<T>) {
+    setIsMutatingComments(true);
+    try {
+      const result = await action();
+      try {
+        await mutateComments();
+      } catch {
+        // 留言重新載入失敗會顯示在 commentsError，不影響已成功的寫入操作。
+      }
+      return result;
+    } finally {
+      setIsMutatingComments(false);
+    }
+  }
+
+  async function addComment(author: string, body: string) {
+    setCommentActionError('');
+    return runCommentAction(() => postEventComments(eventId, { author, body }));
+  }
+
+  async function setCommentLiked(commentId: string, liked: boolean) {
+    try {
+      await runCommentAction(() =>
+        patchEventCommentsLike(eventId, commentId, { liked }),
+      );
+      setCommentActionError('');
+    } catch (error) {
+      setCommentActionError(error instanceof Error ? error.message : '愛心更新失敗，請再試一次。');
+      throw error;
+    }
+  }
+
+  async function deleteComment(commentId: string) {
+    try {
+      await runCommentAction(() => deleteEventComment(eventId, commentId));
+      setCommentActionError('');
+    } catch (error) {
+      setCommentActionError(error instanceof Error ? error.message : '刪除留言失敗，請再試一次。');
+      throw error;
+    }
+  }
 
   return (
     <main className="page event-detail">
+      {error && (
+        <p className="comment-form__error" role="alert">
+          活動資料背景更新失敗：{error.message}{' '}
+          <button type="button" onClick={() => mutate()}>
+            重試
+          </button>
+        </p>
+      )}
+      {isValidating && <p className="sr-only" aria-live="polite">正在更新活動資料…</p>}
       <EventHero event={event} />
       <div className="event-detail__layout">
-        <EventStory />
-        <DetailSidebar date={event.date} />
-        <HighlightVideo eventId={event.id} />
+        <EventStory event={event} />
+        <DetailSidebar event={event} />
+        <HighlightVideo event={event} />
         <PhotoGallery key={event.id} photos={event.photos} />
         <CommentSection
           eventId={event.id}
-          comments={eventComments}
-          onAdd={onAdd}
-          onDelete={onDelete}
-          onToggleLike={onToggleLike}
+          comments={comments}
+          commentsLoading={commentsLoading}
+          commentsValidating={commentsValidating}
+          commentsError={commentsError}
+          actionError={commentActionError}
+          isMutating={isMutatingComments || commentsValidating}
+          onAdd={addComment}
+          onDelete={deleteComment}
+          onSetLiked={setCommentLiked}
+          onRetryComments={() => mutateComments()}
         />
       </div>
     </main>
   );
+}
+
+export default function EventDetailPage() {
+  const { eventId } = useParams();
+
+  if (!eventId) {
+    return (
+      <main className="page event-detail">
+        <h1>找不到這場活動</h1>
+        <p><Link to="/">返回活動首頁</Link></p>
+      </main>
+    );
+  }
+
+  return <EventDetailContent eventId={eventId} />;
 }

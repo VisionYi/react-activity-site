@@ -16,33 +16,12 @@ import {
   Video,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { EVENTS, CATEGORIES, YEARS, INITIAL_FILTERS, HOME, ALBUMS, VIDEOS } from '../data';
-import type { Filters, ImageAsset } from '../data';
+import { HOME, ALBUMS, VIDEOS } from '../data';
+import type { EventFilters } from '../api/types';
+import { useGetEvents, useGetEventDetail } from '../api/client';
+import { INITIAL_FILTERS, useEventFilters } from '../hooks/useEventFilters';
+import ActivityImage from '../components/ActivityImage';
 import './HomePage.scss';
-
-function Photo({
-  image,
-  className,
-  priority = false,
-}: {
-  image: ImageAsset;
-  className: string;
-  priority?: boolean;
-}) {
-  return (
-    <img
-      className={className}
-      src={image.src}
-      alt={image.alt}
-      width={image.width}
-      height={image.height}
-      style={{ objectPosition: image.position }}
-      loading={priority ? 'eager' : 'lazy'}
-      fetchPriority={priority ? 'high' : 'auto'}
-      decoding="async"
-    />
-  );
-}
 
 function SectionHeading({
   content,
@@ -65,10 +44,12 @@ function SectionHeading({
   );
 }
 
-function HeroSection() {
-  const featured = EVENTS.find((event) => event.id === HOME.hero.featuredEventId)!;
+function HeroSection({ totalEvents }: { totalEvents: number }) {
+  const { data: featured, error, isLoading, isValidating, mutate } = useGetEventDetail(
+    HOME.hero.featuredEventId,
+  );
   const stats = [
-    { value: EVENTS.length, label: '場溫暖活動' },
+    { value: totalEvents, label: '場溫暖活動' },
     { value: ALBUMS.length, label: '本回憶相簿' },
     { value: VIDEOS.length, label: '部精選影片' },
   ];
@@ -89,7 +70,7 @@ function HeroSection() {
           <div className="hero__actions">
             <Link
               className="button button--accent button--pill"
-              to="/#activities"
+              to="/?section=activities"
               onClick={() => document.getElementById('activities')?.scrollIntoView()}
             >
               <Compass size={18} aria-hidden="true" />
@@ -97,7 +78,7 @@ function HeroSection() {
             </Link>
             <Link
               className="button button--soft button--pill"
-              to="/#albums"
+              to="/?section=albums"
               onClick={() => document.getElementById('albums')?.scrollIntoView()}
             >
               <Images size={18} aria-hidden="true" />
@@ -114,30 +95,66 @@ function HeroSection() {
           </dl>
         </div>
         <div className="hero__visual">
-          <Photo image={featured.cover} className="hero__photo" priority />
-          <p className="hero__badge">
-            <span className="status-dot" />
-            {HOME.hero.badge}
-          </p>
-          <Link className="hero__featured" to={`/events/${featured.id}`}>
-            <span className="hero__featured-icon">
-              <Trees size={24} aria-hidden="true" />
-            </span>
-            <span className="hero__featured-copy">
-              <span className="hero__featured-label">{HOME.hero.featuredLabel}</span>
-              <strong>{featured.title}</strong>
-              <span>{featured.location}</span>
-            </span>
-            <ArrowRight size={20} className="shrink-0" aria-hidden="true" />
-          </Link>
+          {featured ? (
+            <>
+              <ActivityImage image={featured.cover} className="hero__photo" priority />
+              <p className="hero__badge" role={error ? 'alert' : 'status'}>
+                <span className="status-dot" />
+                {error ? (
+                  <>
+                    精選活動更新失敗。{' '}
+                    <button type="button" onClick={() => void mutate()}>
+                      重試
+                    </button>
+                  </>
+                ) : HOME.hero.badge}
+              </p>
+              <Link className="hero__featured" to={`/events/${featured.id}`}>
+                <span className="hero__featured-icon">
+                  <Trees size={24} aria-hidden="true" />
+                </span>
+                <span className="hero__featured-copy">
+                  <span className="hero__featured-label">{HOME.hero.featuredLabel}</span>
+                  <strong>{featured.title}</strong>
+                  <span>{featured.location}</span>
+                </span>
+                <ArrowRight size={20} className="shrink-0" aria-hidden="true" />
+              </Link>
+            </>
+          ) : (
+            <p className="hero__featured-copy" role={error ? 'alert' : 'status'}>
+              {error ? '精選活動暫時載入失敗。' : isLoading ? '載入精選活動…' : '正在更新精選活動…'}{' '}
+              {error && (
+                <button type="button" onClick={() => void mutate()}>
+                  重試
+                </button>
+              )}
+            </p>
+          )}
+          {featured && isValidating && <span className="sr-only">正在更新精選活動資料</span>}
         </div>
       </div>
     </section>
   );
 }
 
-type FilterProps = { filters: Filters; onChange: (patch: Partial<Filters>) => void };
-function FilterBar({ filters, onChange, count }: FilterProps & { count: number }) {
+type FilterProps = {
+  filters: EventFilters;
+  onChange: (patch: Partial<EventFilters>) => void;
+};
+function FilterBar({
+  filters,
+  onChange,
+  count,
+  total,
+  categories,
+  years,
+}: FilterProps & {
+  count: number;
+  total: number;
+  categories: { name: string; count: number }[];
+  years: string[];
+}) {
   return (
     <fieldset className="filter-bar">
       <legend className="sr-only">尋找活動回憶</legend>
@@ -162,7 +179,7 @@ function FilterBar({ filters, onChange, count }: FilterProps & { count: number }
             onChange={(event) => onChange({ year: event.currentTarget.value })}
           >
             <option value="">全部年份</option>
-            {YEARS.map((year) => (
+            {years.map((year) => (
               <option key={year} value={year}>
                 {year} 年度
               </option>
@@ -176,7 +193,9 @@ function FilterBar({ filters, onChange, count }: FilterProps & { count: number }
           <select
             className="filter-bar__control"
             value={filters.sort}
-            onChange={(event) => onChange({ sort: event.currentTarget.value })}
+            onChange={(event) =>
+              onChange({ sort: event.currentTarget.value === 'oldest' ? 'oldest' : 'newest' })
+            }
           >
             <option value="newest">日期由新到舊</option>
             <option value="oldest">日期由舊到新</option>
@@ -189,7 +208,7 @@ function FilterBar({ filters, onChange, count }: FilterProps & { count: number }
         role="group"
         aria-label="活動分類"
       >
-        {['', ...CATEGORIES].map((category) => (
+        {['', ...categories.map((category) => category.name)].map((category) => (
           <button
             className="filter-bar__category"
             key={category || 'all'}
@@ -199,9 +218,7 @@ function FilterBar({ filters, onChange, count }: FilterProps & { count: number }
           >
             {category || '全部'}
             <span>
-              {category
-                ? EVENTS.filter((event) => event.category === category).length
-                : EVENTS.length}
+              {category ? categories.find((item) => item.name === category)?.count ?? 0 : total}
             </span>
           </button>
         ))}
@@ -209,7 +226,7 @@ function FilterBar({ filters, onChange, count }: FilterProps & { count: number }
       <div className="filter-bar__summary">
         <p className="filter-bar__count" aria-live="polite">
           <span className="status-dot" />
-          顯示 {count} 場活動，共 {EVENTS.length} 場精彩紀錄
+          顯示 {count} 場活動，共 {total} 場精彩紀錄
         </p>
         <button
           className="filter-bar__reset"
@@ -224,30 +241,40 @@ function FilterBar({ filters, onChange, count }: FilterProps & { count: number }
 }
 
 function ActivitySection({ filters, onChange }: FilterProps) {
-  const term = filters.query.trim().toLocaleLowerCase();
-  const visibleEvents = EVENTS.filter(
-    (event) =>
-      `${event.title} ${event.location}`.toLocaleLowerCase().includes(term) &&
-      (!filters.year || event.date.startsWith(filters.year)) &&
-      (!filters.category || event.category === filters.category),
-  ).sort((a, b) =>
-    filters.sort === 'newest' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date),
-  );
+  const { data, error, isLoading, isValidating, mutate } = useGetEvents(filters);
+  const visibleEvents = data?.events ?? [];
   return (
     <section className="activity-section" id="activities" aria-label="活動探索">
       <div className="home-container">
         <SectionHeading content={HOME.events} icon={CalendarDays} />
-        <FilterBar filters={filters} onChange={onChange} count={visibleEvents.length} />
-        {visibleEvents.length === 0 && (
+        <FilterBar
+          filters={filters}
+          onChange={onChange}
+          count={data?.total ?? 0}
+          total={data?.totalEvents ?? 0}
+          categories={data?.categories ?? []}
+          years={data?.years ?? []}
+        />
+        {error && (
+          <div className="activity-section__empty" role="alert">
+            <p>{error.message || '活動資料載入失敗。'}</p>
+            <button type="button" onClick={() => void mutate()}>
+              重試
+            </button>
+          </div>
+        )}
+        {!error && isLoading && <p className="activity-section__empty">正在載入活動資料…</p>}
+        {!error && !isLoading && visibleEvents.length === 0 && (
           <p className="activity-section__empty">找不到符合條件的活動，試著重設所有條件。</p>
         )}
+        {data && isValidating && <p className="sr-only" aria-live="polite">正在更新活動資料…</p>}
         <ul className="activity-list">
           {visibleEvents.map((event) => (
             <li key={event.id}>
               <article className="event-card">
                 <Link className="event-card__link" to={`/events/${event.id}`}>
                   <div className="event-card__cover">
-                    <Photo image={event.cover} className="event-card__image" />
+                    <ActivityImage image={event.cover} className="event-card__image" />
                     <span className="event-card__category">{event.category}</span>
                     <span className="event-card__tag">活動紀錄</span>
                   </div>
@@ -287,7 +314,7 @@ function AlbumSection() {
               key={album.id}
             >
               <Link className="album-card" to="/">
-                <Photo image={album.image} className="album-card__image" />
+                <ActivityImage image={album.image} className="album-card__image" />
                 <div className="album-card__copy">
                   {album.label && <span className="album-card__label">{album.label}</span>}
                   <h3 className="album-card__title">{album.title}</h3>
@@ -312,7 +339,7 @@ function VideoSection() {
             <li key={video.id}>
               <Link className="video-card" to="/">
                 <div className="video-card__cover">
-                  <Photo image={video.image} className="video-card__image" />
+                  <ActivityImage image={video.image} className="video-card__image" />
                   <span className="video-card__play">
                     <Play size={26} fill="currentColor" aria-hidden="true" />
                   </span>
@@ -358,17 +385,13 @@ function CommunityBanner() {
   );
 }
 
-export default function HomePage({
-  filters,
-  onFilterChange,
-}: {
-  filters: Filters;
-  onFilterChange: (patch: Partial<Filters>) => void;
-}) {
+export default function HomePage() {
+  const { filters, updateFilters } = useEventFilters();
+  const { data } = useGetEvents(filters);
   return (
     <main>
-      <HeroSection />
-      <ActivitySection filters={filters} onChange={onFilterChange} />
+      <HeroSection totalEvents={data?.totalEvents ?? 0} />
+      <ActivitySection filters={filters} onChange={updateFilters} />
       <AlbumSection />
       <VideoSection />
       <CommunityBanner />

@@ -1,53 +1,19 @@
 // src/App.tsx
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router';
 import HomePage from './pages/HomePage';
 import EventDetailPage from './pages/EventDetailPage';
-import { EVENTS, INITIAL_FILTERS, HOME } from './data';
-import type { Filters, CommentItem } from './data';
+import { HOME } from './data';
 import './App.scss';
 
 export default function App() {
-  const { pathname, hash } = useLocation();
+  const { pathname, hash, search } = useLocation();
   // 額外補充：Router 只更新網址，切頁後的錨點捲動需等 DOM 掛載。
   useEffect(() => {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
-  }, [pathname, hash]);
-
-  const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS);
-  const [comments, setComments] = useState<CommentItem[]>([]);
-
-  function changeFilters(patch: Partial<Filters>) {
-    setFilters({ ...filters, ...patch });
-  }
-
-  function addComment(eventId: string, body: string) {
-    if (!EVENTS.some((item) => item.id === eventId)) return;
-    // 在送出事件中建立 ID；不在 render 或 map 的 key 裡隨機生成。
-    const newComment: CommentItem = {
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      eventId,
-      body,
-      likes: 0,
-      liked: false,
-    };
-    setComments([...comments, newComment]);
-  }
-
-  function deleteComment(id: string) {
-    setComments(comments.filter((item) => item.id !== id));
-  }
-
-  function toggleLike(id: string) {
-    setComments(
-      comments.map((item) =>
-        item.id === id
-          ? { ...item, liked: !item.liked, likes: item.likes + (item.liked ? -1 : 1) }
-          : item,
-      ),
-    );
-  }
+    const section = new URLSearchParams(search).get('section');
+    if (section) document.getElementById(section)?.scrollIntoView();
+  }, [pathname, hash, search]);
 
   return (
     <>
@@ -65,7 +31,7 @@ export default function App() {
             </span>
           </Link>
           <Link
-            to="/#activities"
+            to="/?section=activities"
             onClick={() => document.getElementById('activities')?.scrollIntoView()}
             className="button button--accent site-header__nav-link"
           >
@@ -74,18 +40,8 @@ export default function App() {
         </header>
       </div>
       <Routes>
-        <Route path="/" element={<HomePage filters={filters} onFilterChange={changeFilters} />} />
-        <Route
-          path="/events/:eventId"
-          element={
-            <EventDetailPage
-              comments={comments}
-              onAdd={addComment}
-              onDelete={deleteComment}
-              onToggleLike={toggleLike}
-            />
-          }
-        />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/events/:eventId" element={<EventDetailPage />} />
         <Route
           path="*"
           element={
