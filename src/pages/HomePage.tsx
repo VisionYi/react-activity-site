@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDate } from '../utils/date';
 import { Link } from 'react-router';
 import {
@@ -243,7 +243,6 @@ function ActivitySection() {
   const [isComposing, setIsComposing] = useState(false);
   const skipDebounceRef = useRef(false);
   const queryDraft = queryInput.committedQuery === filters.query ? queryInput.value : filters.query;
-  const commitQuery = useEffectEvent((query: string) => updateFilters({ query }));
 
   useEffect(() => {
     if (isComposing) return;
@@ -253,18 +252,18 @@ function ActivitySection() {
     }
     if (skipDebounceRef.current) return;
 
-    const timeoutId = window.setTimeout(() => commitQuery(queryDraft), 600);
+    const timeoutId = window.setTimeout(() => updateFilters({ query: queryDraft }), 600);
     return () => window.clearTimeout(timeoutId);
-  }, [filters.query, isComposing, queryDraft]);
+  }, [filters.query, isComposing, queryDraft, updateFilters]);
 
   function handleFilterChange(patch: Partial<EventFilters>) {
+    const { query, ...immediateFilters } = patch;
+
     if (Object.hasOwn(patch, 'query')) {
       skipDebounceRef.current = false;
-      setQueryInput({ value: patch.query ?? '', committedQuery: filters.query });
+      setQueryInput({ value: query ?? '', committedQuery: filters.query });
     }
 
-    const immediateFilters = { ...patch };
-    delete immediateFilters.query;
     if (Object.keys(immediateFilters).length > 0) updateFilters(immediateFilters);
   }
 
