@@ -5,7 +5,7 @@ export type { ImageAsset } from './assets/imageCatalog';
 // 首頁展示資料與文案集中在這裡；不把可計算的統計另存 state。
 export const HOME = {
   hero: {
-    eyebrow: '天堂體系・能量學生命日誌',
+    eyebrow: '天堂體系・活動回憶展示網站',
     title: '一起走過的每一段旅程，',
     highlight: '都值得被記住。',
     description:

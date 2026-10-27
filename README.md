@@ -1,4 +1,4 @@
-# React Activity Site 天堂體系｜能量學生命日誌
+# React Activity Site 天堂體系｜活動回憶展示網站
 
 以 React、TypeScript 製作的活動回憶展示網站，提供活動搜尋、詳情、相簿、影片與留言互動。
 

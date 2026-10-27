@@ -19,7 +19,7 @@ export default function App() {
     <>
       <div className="site-header-shell">
         <header className="site-header">
-          <Link to="/" className="site-header__brand" aria-label="天堂體系 能量學生命日誌首頁">
+          <Link to="/" className="site-header__brand" aria-label="天堂體系 活動回憶展示網站首頁">
             <img
               src={`${import.meta.env.BASE_URL}brand/logo-mark.svg`}
               alt=""
@@ -27,7 +27,7 @@ export default function App() {
             />
             <span className="site-header__wordmark">
               <span className="site-header__title">天堂體系</span>
-              <span className="site-header__subtitle">能量學生命日誌</span>
+              <span className="site-header__subtitle">活動回憶展示網站</span>
             </span>
           </Link>
           <Link
